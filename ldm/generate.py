@@ -41,6 +41,7 @@ from ldm.invoke.conditioning import get_uc_and_c_and_ec
 from ldm.invoke.model_cache import ModelCache
 from ldm.invoke.seamless import configure_model_padding
 from ldm.invoke.txt2mask import Txt2Mask, SegmentedGrayscale
+from ldm.invoke.concepts_lib import Concepts
     
 def fix_func(orig):
     if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
@@ -844,6 +845,7 @@ class Generate:
         model_data = cache.get_model(model_name)
         if model_data is None:  # restore previous
             model_data = cache.get_model(self.model_name)
+            model_name = self.model_name # addresses Issue #1547
 
         self.model = model_data['model']
         self.width = model_data['width']
@@ -862,6 +864,12 @@ class Generate:
         self.model_name = model_name
         self._set_sampler()  # requires self.model_name to be set first
         return self.model
+
+    def load_concepts(self,concepts:list[str]):
+        self.model.embedding_manager.load_concepts(concepts, self.precision=='float32' or self.precision=='autocast')
+
+    def concept_lib(self)->Concepts:
+        return self.model.embedding_manager.concepts_library
 
     def correct_colors(self,
                        image_list,
