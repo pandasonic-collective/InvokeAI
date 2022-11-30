@@ -5,6 +5,7 @@ including img2img, txt2img, and inpaint
 from __future__ import annotations
 
 import os
+import os.path as osp
 import random
 import traceback
 
@@ -43,6 +44,7 @@ class Generator:
         self.with_variations = []
         self.use_mps_noise = False
         self.free_gpu_mem = None
+        self.caution_img = None
 
     # this is going to be overridden in img2img.py, txt2img.py and inpaint.py
     def get_make_image(self,prompt,**kwargs):
@@ -112,7 +114,7 @@ class Generator:
                 seed = self.new_seed()
 
         return results
-    
+
     def sample_to_image(self,samples)->Image.Image:
         """
         Given samples returned from a sampler, converts
@@ -228,11 +230,11 @@ class Generator:
         (txt2img) or from the latent image (img2img, inpaint)
         """
         raise NotImplementedError("get_noise() must be implemented in a descendent class")
-    
+
     def get_perlin_noise(self,width,height):
         fixdevice = 'cpu' if (self.model.device.type == 'mps') else self.model.device
         return torch.stack([rand_perlin_2d((height, width), (8, 8), device = self.model.device).to(fixdevice) for _ in range(self.latent_channels)], dim=0).to(self.model.device)
-    
+
     def new_seed(self):
         self.seed = random.randrange(0, np.iinfo(np.uint32).max)
         return self.seed
@@ -301,12 +303,28 @@ class Generator:
     def blur(self,input):
         blurry = input.filter(filter=ImageFilter.GaussianBlur(radius=32))
         try:
-            caution = Image.open(CAUTION_IMG)
-            caution = caution.resize((caution.width // 2, caution.height //2))
-            blurry.paste(caution,(0,0),caution)
+            caution = self.get_caution_img()
+            if caution:
+                blurry.paste(caution,(0,0),caution)
         except FileNotFoundError:
             pass
         return blurry
+
+    def get_caution_img(self):
+        if self.caution_img:
+            return self.caution_img
+        # Find the caution image. If we are installed in the package directory it will
+        # be six levels up. If we are in the repo directory it will be three levels up.
+        for dots in ('../../..','../../../../../..'):
+            caution_path = osp.join(osp.dirname(__file__),dots,CAUTION_IMG)
+            if osp.exists(caution_path):
+                path = caution_path
+                break
+        if not path:
+            return
+        caution = Image.open(path)
+        self.caution_img = caution.resize((caution.width // 2, caution.height //2))
+        return self.caution_img
 
     # this is a handy routine for debugging use. Given a generated sample,
     # convert it into a PNG image and store it at the indicated path
@@ -318,4 +336,4 @@ class Generator:
             os.makedirs(dirname, exist_ok=True)
         image.save(filepath,'PNG')
 
-        
+
