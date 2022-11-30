@@ -97,6 +97,10 @@ jobs:
             --no-interactive --yes \
             --full-precision  # can't use fp16 weights without a GPU
 
+      - name: cat ~/.invokeai
+        id: cat-invokeai
+        run: cat ~/.invokeai
+
       - name: Run the tests
         id: run-tests
         env:
@@ -106,6 +110,7 @@ jobs:
           TRANSFORMERS_OFFLINE: 1
         run: |
           time python scripts/invoke.py \
+            --no-patchmatch \
             --model ${{ matrix.stable-diffusion-model }} \
             --from_file ${{ env.TEST_PROMPTS }} \
             --root="${{ env.INVOKEAI_ROOT }}" \
